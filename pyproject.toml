@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [tool.vercel]
-entrypoint = "app/main.py"
+entrypoint = "api/index.py"
 
 [tool.setuptools.packages.find]
 where = ["."]

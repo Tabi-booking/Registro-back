@@ -71,7 +71,7 @@ Interactive docs: `http://localhost:8001/docs`
 
 ## Deploy on Vercel
 
-This project is configured for [Vercel's FastAPI runtime](https://vercel.com/docs/frameworks/backend/fastapi). The entrypoint is `app/main.py` (see `pyproject.toml` → `[tool.vercel]`).
+This project is configured for [Vercel's FastAPI runtime](https://vercel.com/docs/frameworks/backend/fastapi). The serverless entrypoint is `api/index.py`, which re-exports the app from `app/main.py` (see `pyproject.toml` → `[tool.vercel]`).
 
 ### 1. Connect the repository
 
