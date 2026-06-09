@@ -65,9 +65,10 @@ def _create_engine() -> AsyncEngine:
     url = _database_url()
     if settings.is_serverless:
         logger.info(
-            "Creating serverless DB engine (NullPool) host=%s port=%s",
+            "Creating serverless DB engine (NullPool) url_host=%s port=%s user=%s",
             settings.DB_HOST,
-            settings.DB_PORT,
+            settings.effective_db_port,
+            settings.effective_db_user,
         )
         return create_async_engine(
             url,

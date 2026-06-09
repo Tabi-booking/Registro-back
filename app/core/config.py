@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from typing import Literal
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -55,6 +55,23 @@ class Settings(BaseSettings):
         return host.startswith("db.") and host.endswith(".supabase.co")
 
     @property
+    def effective_db_user(self) -> str:
+        user = self.DB_USER.strip()
+        # postgres.<ref> only applies to aws-0-*.pooler.supabase.com, not db.<ref>.supabase.co
+        if self.is_serverless and self.uses_direct_supabase_host and user.startswith("postgres."):
+            return "postgres"
+        return user
+
+    @property
+    def effective_db_port(self) -> int:
+        # Supabase pooler on the same db.* host uses port 6543 (IPv4-friendly for serverless)
+        if self.is_serverless and self.uses_direct_supabase_host and self.DB_PORT == 5432:
+            explicit = self.DATABASE_URL.strip() or os.getenv("DATABASE_URL", "").strip()
+            if not explicit:
+                return 6543
+        return self.DB_PORT
+
+    @property
     def effective_db_pool_size(self) -> int:
         if self.is_serverless:
             return 1
@@ -74,15 +91,53 @@ class Settings(BaseSettings):
             return "postgresql+asyncpg://" + value[len("postgresql://") :]
         return value
 
+    def _sanitize_serverless_url(self, url: str) -> str:
+        """Fix common Supabase misconfig: pooler user on db.* host or port 5432 on serverless."""
+        normalized = self._normalize_async_url(url)
+        bare = normalized.replace("postgresql+asyncpg://", "http://", 1)
+        parsed = urlparse(bare)
+        host = (parsed.hostname or "").lower()
+        if not (host.startswith("db.") and host.endswith(".supabase.co")):
+            return normalized
+
+        username = parsed.username or ""
+        port = parsed.port or 5432
+        password = parsed.password or ""
+        path = parsed.path or "/postgres"
+
+        fixed_user = "postgres" if username.startswith("postgres.") else username
+        fixed_port = 6543 if port == 5432 else port
+        auth = ""
+        if fixed_user:
+            auth = fixed_user
+            if password:
+                auth += f":{password}"
+            auth += "@"
+
+        rebuilt = urlunparse(
+            (
+                "postgresql+asyncpg",
+                f"{auth}{host}:{fixed_port}",
+                path,
+                "",
+                "",
+                "",
+            )
+        )
+        return rebuilt.replace("http://", "", 1) if rebuilt.startswith("http://") else rebuilt
+
     @property
     def async_database_url(self) -> str:
         explicit = self.DATABASE_URL.strip() or os.getenv("DATABASE_URL", "").strip()
         if explicit:
-            return self._normalize_async_url(explicit)
+            url = self._normalize_async_url(explicit)
+            if self.is_serverless:
+                return self._sanitize_serverless_url(url)
+            return url
         password = quote_plus(self.DB_PASSWORD)
         return (
-            f"postgresql+asyncpg://{self.DB_USER}:{password}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+            f"postgresql+asyncpg://{self.effective_db_user}:{password}"
+            f"@{self.DB_HOST}:{self.effective_db_port}/{self.DB_NAME}"
         )
 
     @property
