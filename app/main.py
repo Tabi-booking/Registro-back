@@ -117,6 +117,21 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
+# ── Root (useful for Vercel deployment checks) ────────────────────────────────
+@app.get("/", include_in_schema=False)
+async def root() -> dict:
+    return {
+        "success": True,
+        "data": {
+            "service": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "health": "/api/v1/health",
+            "docs": "/docs" if settings.ENVIRONMENT != "production" else None,
+        },
+        "message": "Tabi Formulario API",
+    }
+
+
 # ── Health check ───────────────────────────────────────────────────────────────
 @app.get("/api/v1/health", tags=["Health"])
 async def health_check() -> dict:

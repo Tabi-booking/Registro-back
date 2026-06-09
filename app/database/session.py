@@ -4,19 +4,42 @@ from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    echo=settings.DB_ECHO,
-    connect_args={
-        "ssl": "require" if settings.DB_SSLMODE == "require" else None,
+
+def _connect_args() -> dict:
+    args: dict = {
         "server_settings": {"application_name": "tabi-formulario"},
-    },
-)
+    }
+    if settings.DB_SSLMODE == "require":
+        args["ssl"] = "require"
+    if settings.is_serverless:
+        # Required for Supabase pooler (PgBouncer transaction mode) + asyncpg
+        args["statement_cache_size"] = 0
+        args["prepared_statement_cache_size"] = 0
+    return args
+
+
+def _create_engine():
+    if settings.is_serverless:
+        return create_async_engine(
+            settings.DATABASE_URL,
+            poolclass=NullPool,
+            echo=settings.DB_ECHO,
+            connect_args=_connect_args(),
+        )
+    return create_async_engine(
+        settings.DATABASE_URL,
+        pool_size=settings.effective_db_pool_size,
+        max_overflow=settings.effective_db_max_overflow,
+        echo=settings.DB_ECHO,
+        connect_args=_connect_args(),
+    )
+
+
+engine = _create_engine()
 
 AsyncSessionLocal = async_sessionmaker(
     engine,

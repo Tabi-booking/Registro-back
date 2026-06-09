@@ -36,8 +36,8 @@ formulario-backend/
 ## Local Setup
 
 ### Prerequisites
-- Python 3.13+
-- Redis (local or Docker)
+- Python 3.12+
+- Redis (local or Docker — optional; app fails open without it)
 - Access to Tabi Supabase instance
 
 ### Steps
@@ -66,6 +66,58 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 The API will be available at `http://localhost:8001`.
 
 Interactive docs: `http://localhost:8001/docs`
+
+---
+
+## Deploy on Vercel
+
+This project is configured for [Vercel's FastAPI runtime](https://vercel.com/docs/frameworks/backend/fastapi). The entrypoint is `app/main.py` (see `pyproject.toml` → `[tool.vercel]`).
+
+### 1. Connect the repository
+
+Import [Tabi-booking/Registro-back](https://github.com/Tabi-booking/Registro-back) in the Vercel dashboard. Vercel detects Python from `requirements.txt` / `pyproject.toml` and uses Python **3.12** (`.python-version`).
+
+### 2. Environment variables
+
+Copy every variable from `.env.example` into **Project Settings → Environment Variables**. Minimum for production:
+
+| Variable | Notes |
+|----------|-------|
+| `ENVIRONMENT` | `production` |
+| `SECRET_KEY` | `openssl rand -hex 32` |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Supabase Postgres |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Storage presigned uploads |
+| `STORAGE_BUCKET` | `restaurant-documents` (must exist in Supabase) |
+| `CORS_ORIGINS` | Frontend URL(s), comma-separated |
+
+**Recommended for serverless:**
+
+- Use Supabase **connection pooler** (port `6543`) as `DB_HOST` to avoid connection limits.
+- Set `REDIS_CONNECTION_URL` to [Upstash Redis](https://upstash.com/) (or leave empty — cache/rate-limit degrade gracefully).
+
+Vercel injects `VERCEL=1` automatically; the app switches to `NullPool` for Postgres.
+
+### 3. Deploy
+
+```bash
+npm i -g vercel   # or use the Vercel dashboard
+vercel --prod
+```
+
+### 4. Verify
+
+```bash
+curl https://<your-project>.vercel.app/api/v1/health
+curl https://<your-project>.vercel.app/
+```
+
+Local preview with Vercel CLI:
+
+```bash
+vercel dev
+```
+
+**Note:** Run `scripts/supabase_onboarding_schema.sql` in Supabase SQL Editor — migrations are not executed on Vercel.
 
 ---
 
@@ -100,8 +152,10 @@ Services:
 | `DB_PASSWORD` | Yes | — | PostgreSQL password |
 | `DB_NAME` | No | postgres | Database name |
 | `DB_SSLMODE` | No | require | SSL mode |
-| `REDIS_HOST` | No | localhost | Redis host |
-| `REDIS_PORT` | No | 6379 | Redis port |
+| `REDIS_HOST` | No | localhost | Redis host (local) |
+| `REDIS_PORT` | No | 6379 | Redis port (local) |
+| `REDIS_CONNECTION_URL` | No | — | Full Redis URL (Vercel / Upstash) |
+| `DB_USE_POOLER` | No | false | Enable serverless pool settings with Supabase pooler |
 | `SECRET_KEY` | Yes | — | JWT signing key (min 32 chars) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | 15 | JWT access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | No | 7 | Refresh token lifetime |

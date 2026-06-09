@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Literal
+import os
+from typing import Literal
+from urllib.parse import quote_plus
 
-from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,22 +36,47 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_ECHO: bool = False
+    # Use Supabase pooler (port 6543) on serverless — avoids exhausting DB connections
+    DB_USE_POOLER: bool = False
+
+    @property
+    def is_vercel(self) -> bool:
+        return os.getenv("VERCEL") == "1"
+
+    @property
+    def is_serverless(self) -> bool:
+        return self.is_vercel or self.DB_USE_POOLER
+
+    @property
+    def effective_db_pool_size(self) -> int:
+        if self.is_serverless:
+            return 1
+        return self.DB_POOL_SIZE
+
+    @property
+    def effective_db_max_overflow(self) -> int:
+        if self.is_serverless:
+            return 0
+        return self.DB_MAX_OVERFLOW
 
     @property
     def DATABASE_URL(self) -> str:
+        password = quote_plus(self.DB_PASSWORD)
         return (
-            f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"postgresql+asyncpg://{self.DB_USER}:{password}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
     @property
     def SYNC_DATABASE_URL(self) -> str:
+        password = quote_plus(self.DB_PASSWORD)
         return (
-            f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"postgresql+psycopg2://{self.DB_USER}:{password}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
-    # Redis
+    # Redis — set REDIS_CONNECTION_URL (e.g. Upstash) on Vercel
+    REDIS_CONNECTION_URL: str = ""
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str = ""
@@ -59,6 +85,9 @@ class Settings(BaseSettings):
 
     @property
     def REDIS_URL(self) -> str:
+        explicit = self.REDIS_CONNECTION_URL.strip() or os.getenv("REDIS_URL", "").strip()
+        if explicit:
+            return explicit
         if self.REDIS_PASSWORD:
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
