@@ -104,11 +104,18 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS (comma-separated in .env, e.g. http://localhost:3000,http://localhost:5173)
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    # CORS: "*" permite cualquier origen; o lista separada por comas / JSON array
+    CORS_ORIGINS: str = "*"
+
+    @property
+    def cors_allow_all(self) -> bool:
+        value = self.CORS_ORIGINS.strip().lower()
+        return value in ("*", "all", "any")
 
     @property
     def cors_origins(self) -> list[str]:
+        if self.cors_allow_all:
+            return ["*"]
         value = self.CORS_ORIGINS.strip()
         if value.startswith("["):
             return json.loads(value)
