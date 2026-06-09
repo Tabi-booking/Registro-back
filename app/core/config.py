@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8001
 
-    # Database
+    # Database — on Vercel use Supabase pooler (port 6543), not db.*.supabase.co direct
+    DATABASE_URL: str = ""
     DB_HOST: str = "db.bakkcbqdcuktgmzztxcr.supabase.co"
     DB_PORT: int = 5432
     DB_USER: str = "postgres"
@@ -36,16 +37,22 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_ECHO: bool = False
-    # Use Supabase pooler (port 6543) on serverless — avoids exhausting DB connections
     DB_USE_POOLER: bool = False
 
     @property
     def is_vercel(self) -> bool:
-        return os.getenv("VERCEL") == "1"
+        if os.getenv("VERCEL_ENV"):
+            return True
+        return os.getenv("VERCEL", "").strip().lower() in ("1", "true", "yes")
 
     @property
     def is_serverless(self) -> bool:
-        return self.is_vercel or self.DB_USE_POOLER
+        return self.is_vercel or self.DB_USE_POOLER or self.ENVIRONMENT == "production"
+
+    @property
+    def uses_direct_supabase_host(self) -> bool:
+        host = self.DB_HOST.strip().lower()
+        return host.startswith("db.") and host.endswith(".supabase.co")
 
     @property
     def effective_db_pool_size(self) -> int:
@@ -59,8 +66,19 @@ class Settings(BaseSettings):
             return 0
         return self.DB_MAX_OVERFLOW
 
+    def _normalize_async_url(self, url: str) -> str:
+        value = url.strip()
+        if value.startswith("postgres://"):
+            return "postgresql+asyncpg://" + value[len("postgres://") :]
+        if value.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + value[len("postgresql://") :]
+        return value
+
     @property
-    def DATABASE_URL(self) -> str:
+    def async_database_url(self) -> str:
+        explicit = self.DATABASE_URL.strip() or os.getenv("DATABASE_URL", "").strip()
+        if explicit:
+            return self._normalize_async_url(explicit)
         password = quote_plus(self.DB_PASSWORD)
         return (
             f"postgresql+asyncpg://{self.DB_USER}:{password}"
@@ -69,6 +87,14 @@ class Settings(BaseSettings):
 
     @property
     def SYNC_DATABASE_URL(self) -> str:
+        explicit = self.DATABASE_URL.strip() or os.getenv("DATABASE_URL", "").strip()
+        if explicit:
+            url = explicit.strip()
+            if url.startswith("postgresql+asyncpg://"):
+                return "postgresql://" + url[len("postgresql+asyncpg://") :]
+            if url.startswith("postgres://"):
+                return "postgresql://" + url[len("postgres://") :]
+            return url
         password = quote_plus(self.DB_PASSWORD)
         return (
             f"postgresql+psycopg2://{self.DB_USER}:{password}"

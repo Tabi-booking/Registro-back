@@ -10,7 +10,7 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
-from app.database.session import AsyncSessionLocal, get_redis
+from app.database.session import get_db, get_redis
 from app.repositories.tabi_repository import RestauranteRepository, RolRepository, UsuarioRepository
 from app.schemas.auth import AuthUser
 
@@ -21,17 +21,6 @@ bearer_scheme = HTTPBearer(auto_error=False)
 class OnboardingContext:
     restaurant_id: int
     user_id: int | None = None
-
-
-async def get_db() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
 
 
 async def get_redis_client() -> aioredis.Redis:

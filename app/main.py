@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import TabiException
-from app.database.session import close_redis, engine, get_redis
+from app.database.session import close_redis, get_engine, get_redis
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down...")
     await close_redis()
-    await engine.dispose()
+    await get_engine().dispose()
     logger.info("Shutdown complete")
 
 
@@ -136,6 +136,9 @@ async def root() -> dict:
 @app.get("/api/v1/health", tags=["Health"])
 async def health_check() -> dict:
     redis_ok = False
+    db_ok = False
+    db_hint: str | None = None
+
     try:
         redis = get_redis()
         await redis.ping()
@@ -143,13 +146,34 @@ async def health_check() -> dict:
     except Exception:
         pass
 
+    try:
+        from sqlalchemy import text
+
+        from app.database.session import get_session_factory
+
+        async with get_session_factory()() as session:
+            await session.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception as exc:
+        if settings.is_vercel and settings.uses_direct_supabase_host:
+            db_hint = (
+                "Use Supabase connection pooler (port 6543) or set DATABASE_URL in Vercel. "
+                f"Detail: {type(exc).__name__}"
+            )
+        else:
+            db_hint = type(exc).__name__
+
+    status = "healthy" if db_ok else "degraded"
     return {
-        "success": True,
+        "success": db_ok,
         "data": {
-            "status": "healthy",
+            "status": status,
             "version": settings.APP_VERSION,
             "environment": settings.ENVIRONMENT,
+            "database": "ok" if db_ok else "unavailable",
             "redis": "ok" if redis_ok else "unavailable",
+            "serverless": settings.is_serverless,
+            "db_hint": db_hint,
         },
-        "message": "Service is running",
+        "message": "Service is running" if db_ok else "Database connection failed",
     }
