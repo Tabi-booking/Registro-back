@@ -71,7 +71,7 @@ Interactive docs: `http://localhost:8001/docs`
 
 ## Deploy on Vercel
 
-This project is configured for [Vercel's FastAPI runtime](https://vercel.com/docs/frameworks/backend/fastapi). No `vercel.json` is required — Vercel loads the `app` instance from `app/main.py` via `pyproject.toml` → `[tool.vercel]`.
+This project is configured for [Vercel's FastAPI runtime](https://vercel.com/docs/frameworks/backend/fastapi). Dependencies install from `requirements.txt`; the app loads from `app/main.py` via `pyproject.toml` → `[tool.vercel]`.
 
 ### 1. Connect the repository
 
