@@ -1,0 +1,31 @@
+from app.models.tabi import (
+    Categoria,
+    DocumentoRestaurante,
+    Etiqueta,
+    Horario,
+    Restaurante,
+    RestauranteCategoria,
+    RestauranteEtiqueta,
+    RestauranteImagen,
+    RestauranteTipoReserva,
+    Rol,
+    SuscripcionRestaurante,
+    Ubicacion,
+    Usuario,
+)
+
+__all__ = [
+    "Categoria",
+    "DocumentoRestaurante",
+    "Etiqueta",
+    "Horario",
+    "Restaurante",
+    "RestauranteCategoria",
+    "RestauranteEtiqueta",
+    "RestauranteImagen",
+    "RestauranteTipoReserva",
+    "Rol",
+    "SuscripcionRestaurante",
+    "Ubicacion",
+    "Usuario",
+]
